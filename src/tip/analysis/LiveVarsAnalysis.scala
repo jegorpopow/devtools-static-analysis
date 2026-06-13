@@ -1,12 +1,11 @@
 package tip.analysis
 
-import tip.ast._
-import tip.lattices._
 import tip.ast.AstNodeData.DeclarationData
-import tip.solvers._
+import tip.ast._
+import tip.ast.AstOps.AstOp
 import tip.cfg._
-
-import scala.collection.immutable.Set
+import tip.lattices._
+import tip.solvers._
 
 /**
   * Base class for live variables analysis.
@@ -25,15 +24,15 @@ abstract class LiveVarsAnalysis(cfg: IntraproceduralProgramCfg)(implicit declDat
       case _: CfgFunExitNode => lattice.sublattice.bottom
       case r: CfgStmtNode =>
         r.data match {
-          case cond: AExpr => ??? //<--- Complete here
+          case cond: AExpr => lattice.sublattice.lub(s, cond.appearingIds)
           case as: AAssignStmt =>
             as.left match {
-              case id: AIdentifier => ??? //<--- Complete here
-              case _ => ???
+              case id: AIdentifier => lattice.sublattice.lub(s - id, as.right.appearingIds)
+              case _ => s // Let's just ignore it, it seems to be default way
             }
-          case varr: AVarStmt => ??? //<--- Complete here
-          case ret: AReturnStmt => ??? //<--- Complete here
-          case out: AOutputStmt => ??? //<--- Complete here
+          case varr: AVarStmt => s -- varr.declIds //<--- Complete here
+          case ret: AReturnStmt => lattice.sublattice.lub(s, ret.exp.appearingIds)
+          case out: AOutputStmt => lattice.sublattice.lub(s, out.exp.appearingIds)
           case _ => s
         }
       case _ => s
