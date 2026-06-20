@@ -1,14 +1,13 @@
 package tip.analysis
 
 import tip.ast.AstNodeData.DeclarationData
+import tip.cfg.CfgOps.CfgNodeOps
 import tip.cfg._
 import tip.lattices.IntervalLattice._
 import tip.lattices._
 import tip.solvers._
 
-trait IntervalAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNode] {
-
-  import tip.cfg.CfgOps._
+trait VarSizeAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNode] {
 
   val cfg: ProgramCfg
 
@@ -17,14 +16,22 @@ trait IntervalAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNo
   val liftedstatelattice: LiftLattice[statelattice.type]
 
   /**
-    * Int values occurring in the program, plus -infinity and +infinity.
+    * Powers of 2 plus -infinity and +infinity.
     */
-  private val B = cfg.nodes.flatMap { n =>
+  private val Appearing = cfg.nodes.flatMap { n =>
     n.appearingConstants.map { x =>
       IntNum(x.value): Num
     } + MInf + PInf
   }
 
+  private val powers = (0 to 31).map(i => 1 << i)
+  private val allValues = powers ++ powers.map(-_) ++ List(MInf, PInf)
+
+  private val B = allValues.map {
+    case PInf => PInf
+    case MInf => MInf
+    case b: Int => IntNum(b.toInt): Num
+  }.toSet ++ Appearing
   def loophead(n: CfgNode): Boolean = indep(n).exists(cfg.rank(_) > cfg.rank(n))
 
   private def minB(b: IntervalLattice.Num) = B.filter(b <= _).min
@@ -49,7 +56,7 @@ trait IntervalAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNo
     }
 }
 
-object IntervalAnalysis {
+object VarSizeAnalysis {
 
   object Intraprocedural {
 
@@ -59,7 +66,7 @@ object IntervalAnalysis {
     class WorklistSolverWithWidening(cfg: IntraproceduralProgramCfg)(implicit declData: DeclarationData)
         extends IntraprocValueAnalysisWorklistSolverWithReachability(cfg, IntervalLattice)
         with WorklistFixpointSolverWithReachabilityAndWidening[CfgNode]
-        with IntervalAnalysisWidening
+        with VarSizeAnalysisWidening
 
     /**
       * Interval analysis, using the worklist solver with init, widening, and narrowing.
@@ -67,7 +74,7 @@ object IntervalAnalysis {
     class WorklistSolverWithWideningAndNarrowing(cfg: IntraproceduralProgramCfg)(implicit declData: DeclarationData)
         extends IntraprocValueAnalysisWorklistSolverWithReachability(cfg, IntervalLattice)
         with WorklistFixpointSolverWithReachabilityAndWideningAndNarrowing[CfgNode]
-        with IntervalAnalysisWidening {
+        with VarSizeAnalysisWidening {
 
       val narrowingSteps = 5
     }
